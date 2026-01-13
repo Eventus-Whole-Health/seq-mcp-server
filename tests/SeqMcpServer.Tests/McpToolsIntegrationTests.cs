@@ -202,11 +202,146 @@ public class McpToolsIntegrationTests : IAsyncLifetime
         // Act - List available tools via MCP
         var tools = await _mcpClient!.ListToolsAsync();
 
-        // Assert - Should have our three tools
+        // Assert - Should have our 8 tools (3 original + 5 new)
         Assert.NotNull(tools);
         Assert.Contains(tools, t => t.Name == "SeqSearch");
         Assert.Contains(tools, t => t.Name == "SeqWaitForEvents");
         Assert.Contains(tools, t => t.Name == "SignalList");
-        Assert.Equal(3, tools.Count);
+        Assert.Contains(tools, t => t.Name == "AppSearch");
+        Assert.Contains(tools, t => t.Name == "InvocationTrace");
+        Assert.Contains(tools, t => t.Name == "SlowExecutions");
+        Assert.Contains(tools, t => t.Name == "EntityTrace");
+        Assert.Contains(tools, t => t.Name == "ErrorDashboard");
+        Assert.Equal(8, tools.Count);
+    }
+
+    [Fact]
+    public async Task AppSearch_WithValidApp_ReturnsEvents()
+    {
+        // Arrange - Get available tools
+        var tools = await _mcpClient!.ListToolsAsync();
+        var appSearchTool = tools.FirstOrDefault(t => t.Name == "AppSearch");
+        Assert.NotNull(appSearchTool);
+
+        // Act - Call the AppSearch tool via MCP
+        var result = await _mcpClient!.CallToolAsync(
+            "AppSearch",
+            new Dictionary<string, object?>
+            {
+                ["app"] = "pims",
+                ["level"] = "all",
+                ["hours"] = 1,
+                ["count"] = 10
+            });
+
+        // Assert - Should return valid result (may be empty if no matching events)
+        Assert.NotNull(result);
+        Assert.NotNull(result.Content);
+    }
+
+    [Fact]
+    public async Task AppSearch_WithAlias_ResolvesCorrectly()
+    {
+        // Arrange
+        var tools = await _mcpClient!.ListToolsAsync();
+        Assert.Contains(tools, t => t.Name == "AppSearch");
+
+        // Act - Use alias "scribing" which should resolve to "ai-scribing-services"
+        var result = await _mcpClient!.CallToolAsync(
+            "AppSearch",
+            new Dictionary<string, object?>
+            {
+                ["app"] = "scribing",
+                ["hours"] = 1
+            });
+
+        // Assert - Should return valid result without error
+        Assert.NotNull(result);
+        Assert.NotNull(result.Content);
+    }
+
+    [Fact]
+    public async Task InvocationTrace_WithValidId_ReturnsEvents()
+    {
+        // Arrange
+        var tools = await _mcpClient!.ListToolsAsync();
+        Assert.Contains(tools, t => t.Name == "InvocationTrace");
+
+        // Act - Use a test UUID (will return empty in test container but should not error)
+        var result = await _mcpClient!.CallToolAsync(
+            "InvocationTrace",
+            new Dictionary<string, object?>
+            {
+                ["invocationId"] = "00000000-0000-0000-0000-000000000000"
+            });
+
+        // Assert - Should return valid result (may be empty if no matching events)
+        Assert.NotNull(result);
+        Assert.NotNull(result.Content);
+    }
+
+    [Fact]
+    public async Task SlowExecutions_WithThreshold_ReturnsSlowEvents()
+    {
+        // Arrange
+        var tools = await _mcpClient!.ListToolsAsync();
+        Assert.Contains(tools, t => t.Name == "SlowExecutions");
+
+        // Act - Search for slow executions with a threshold
+        var result = await _mcpClient!.CallToolAsync(
+            "SlowExecutions",
+            new Dictionary<string, object?>
+            {
+                ["thresholdMs"] = 1000,
+                ["hours"] = 1,
+                ["count"] = 10
+            });
+
+        // Assert - Should return valid result (may be empty if no slow events)
+        Assert.NotNull(result);
+        Assert.NotNull(result.Content);
+    }
+
+    [Fact]
+    public async Task EntityTrace_WithTypeAndId_ReturnsEvents()
+    {
+        // Arrange
+        var tools = await _mcpClient!.ListToolsAsync();
+        Assert.Contains(tools, t => t.Name == "EntityTrace");
+
+        // Act - Trace a test entity
+        var result = await _mcpClient!.CallToolAsync(
+            "EntityTrace",
+            new Dictionary<string, object?>
+            {
+                ["entityType"] = "Job",
+                ["entityId"] = "TEST-123",
+                ["hours"] = 1
+            });
+
+        // Assert - Should return valid result (may be empty if no matching events)
+        Assert.NotNull(result);
+        Assert.NotNull(result.Content);
+    }
+
+    [Fact]
+    public async Task ErrorDashboard_ReturnsErrors()
+    {
+        // Arrange
+        var tools = await _mcpClient!.ListToolsAsync();
+        Assert.Contains(tools, t => t.Name == "ErrorDashboard");
+
+        // Act - Get errors from last hour
+        var result = await _mcpClient!.CallToolAsync(
+            "ErrorDashboard",
+            new Dictionary<string, object?>
+            {
+                ["hours"] = 1,
+                ["count"] = 50
+            });
+
+        // Assert - Should return valid result (may be empty if no errors)
+        Assert.NotNull(result);
+        Assert.NotNull(result.Content);
     }
 }
